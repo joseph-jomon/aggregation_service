@@ -1,6 +1,6 @@
-import aioredis
+import redis.asyncio as aioredis
 import json
-from app.config import REDIS_HOST, REDIS_PORT, REDIS_DB
+from app.config.config_loader import REDIS_HOST, REDIS_PORT, REDIS_DB
 
 # Create a connection pool for aioredis
 redis_client = aioredis.from_url(f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}", decode_responses=True)

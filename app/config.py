@@ -1,5 +1,11 @@
-import os
+# app/config.py
 
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-REDIS_DB = 0
+import json
+
+# Load configuration from JSON file
+with open("app/config.json", "r") as config_file:
+    config = json.load(config_file)
+
+REDIS_HOST = config["REDIS_HOST"]
+REDIS_PORT = config["REDIS_PORT"]
+REDIS_DB = config["REDIS_DB"]

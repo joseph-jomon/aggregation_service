@@ -1,17 +1,25 @@
 version: '3.8'
 
 services:
-  aggregation_service:
-    build: .
+  redis:
+    image: redis:alpine
+    container_name: redis
     ports:
-      - "8000:8000"
-    depends_on:
-      - rabbitmq
-    environment:
-      - RABBITMQ_HOST=rabbitmq
+      - "6379:6379"
 
-  rabbitmq:
-    image: rabbitmq:3-management
+  aggregation_service:
+    build:
+      context: .  # The build context points to the aggregation_service directory
+      dockerfile: Dockerfile  # Dockerfile is located inside aggregation_service, so it's just "Dockerfile"
+    volumes:
+      - ./app:/app/app  # Mount the app directory to /app/app in the container
+      - ./main.py:/app/main.py  # Mount the main.py file into the container
+      - ./requirements.txt:/app/requirements.txt  # Mount the requirements file
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "8100:8100"  # Application port for aggregation service
+      - "5680:5678"  # Debugger port for aggregation service (host:container)
+    depends_on:
+      - redis
+    environment:
+      - PYTHONUNBUFFERED=1  # Ensure Python output is flushed and displayed in real-time
+    command: ["python", "-m", "debugpy", "--listen", "0.0.0.0:5678", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8100", "--reload"]

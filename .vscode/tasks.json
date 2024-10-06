@@ -1,0 +1,17 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Docker Compose: Build and Start Aggregation Service",
+            "type": "shell",
+            "command": "docker-compose -f aggregation_service/docker-compose.yml up --build",
+            "problemMatcher": [],
+            "isBackground": true,
+            "dependsOn": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

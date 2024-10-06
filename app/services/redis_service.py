@@ -5,34 +5,54 @@ from app.config.config_loader import REDIS_HOST, REDIS_PORT, REDIS_DB
 # Create a connection pool for aioredis
 redis_client = aioredis.from_url(f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}", decode_responses=True)
 
-async def save_embedding(data_id: str, data: dict, embedding_type: str):
+async def save_embeddings_batch(batch_embeddings: list):
     """
-    Asynchronously saves the embedding data into Redis and checks if both embeddings are ready.
+    Asynchronously saves a batch of embedding data into Redis and checks readiness using set operations.
 
     Args:
-        data_id (str): The unique identifier for the data.
-        data (dict): The embedding data to be stored.
-        embedding_type (str): The type of embedding (either text or image).
-    
+        batch_embeddings (list): A list of dictionaries, each containing 'id', 'embedding_type', and 'embedding'.
+
     Returns:
-        dict: The complete data if both embeddings are ready, else None.
+        list: A list of combined data dictionaries if both embeddings are ready.
     """
-    # Use Redis to store the data asynchronously
-    key = f"{data_id}"
+    combined_data_list = []
 
-    # Retrieve existing data for the given ID from Redis
-    existing_data = await redis_client.hgetall(key)
+    # Redis set keys to track text and image embeddings readiness
+    TEXT_EMBEDDING_SET = "text_embedding_ids"
+    IMAGE_EMBEDDING_SET = "image_embedding_ids"
 
-    # Update the data with the new embedding (either text or image)
-    existing_data[embedding_type] = json.dumps(data)
+    async with redis_client.pipeline() as pipe:
+        for embedding_data in batch_embeddings:
+            data_id = embedding_data.id
+            embedding_type = embedding_data.embedding_type
+            embedding = embedding_data.embedding
+            key = f"{data_id}"
 
-    # Store the updated data back into Redis
-    await redis_client.hset(key, mapping=existing_data)
+            # Store embedding in Redis hash
+            existing_data = await redis_client.hgetall(key)
+            existing_data[embedding_type] = json.dumps(embedding)
+            
+            # Add the data to the Redis pipeline
+            pipe.hset(key, mapping=existing_data)
 
-    # Check if both embeddings are ready
-    if 'EMBEDDINGS_TEXT' in existing_data and 'EMBEDDINGS_IMAGE' in existing_data:
-        # If both are present, return the complete data to be processed for ingestion
-        return existing_data
+            # Add the ID to the appropriate set
+            if embedding_type == "EMBEDDINGS_TEXT":
+                pipe.sadd(TEXT_EMBEDDING_SET, data_id)
+            elif embedding_type == "EMBEDDINGS_IMAGE":
+                pipe.sadd(IMAGE_EMBEDDING_SET, data_id)
 
-    # If both embeddings are not yet available, return None
-    return None
+        # Execute all commands in the pipeline
+        await pipe.execute()
+
+    # Use Redis set intersection to find IDs that have both embeddings
+    ready_ids = await redis_client.sinter(TEXT_EMBEDDING_SET, IMAGE_EMBEDDING_SET)
+
+    # Retrieve the data for all IDs that are ready using a pipeline
+    async with redis_client.pipeline() as pipe:
+        for data_id in ready_ids:
+            pipe.hgetall(data_id)
+
+        combined_data_list = await pipe.execute()
+
+    # Return only the complete data for ingestion
+    return [data for data in combined_data_list if data]

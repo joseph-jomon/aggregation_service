@@ -2,4 +2,4 @@ fastapi
 uvicorn
 httpx
 debugpy
-aioredis
+redis

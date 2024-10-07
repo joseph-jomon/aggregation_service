@@ -13,29 +13,32 @@ async def save_embeddings_batch(batch_embeddings: list):
         batch_embeddings (list): A list of dictionaries, each containing 'id', 'embedding_type', and 'embedding'.
 
     Returns:
-        list: A list of combined data dictionaries if both embeddings are ready.
+        list: A list of combined data dictionaries that are ready for ingestion, including 'id', 'text_embedding', and 'image_embedding'.
     """
-    combined_data_list = []
+    combined_data_dict = {}
 
     # Redis set keys to track text and image embeddings readiness
     TEXT_EMBEDDING_SET = "text_embedding_ids"
     IMAGE_EMBEDDING_SET = "image_embedding_ids"
 
+    # Step 1: Store the incoming embeddings in Redis and track their readiness
     async with redis_client.pipeline() as pipe:
         for embedding_data in batch_embeddings:
-            data_id = embedding_data.id
+            data_id = embedding_data.id  # Ensure we use the ID
             embedding_type = embedding_data.embedding_type
             embedding = embedding_data.embedding
             key = f"{data_id}"
 
-            # Store embedding in Redis hash
+            # Retrieve the current data stored for this ID from Redis
             existing_data = await redis_client.hgetall(key)
+
+            # Update the existing data with the new embedding
             existing_data[embedding_type] = json.dumps(embedding)
-            
-            # Add the data to the Redis pipeline
+
+            # Add the updated data to the Redis pipeline
             pipe.hset(key, mapping=existing_data)
 
-            # Add the ID to the appropriate set
+            # Add the ID to the corresponding set for tracking readiness
             if embedding_type == "EMBEDDINGS_TEXT":
                 pipe.sadd(TEXT_EMBEDDING_SET, data_id)
             elif embedding_type == "EMBEDDINGS_IMAGE":
@@ -44,15 +47,23 @@ async def save_embeddings_batch(batch_embeddings: list):
         # Execute all commands in the pipeline
         await pipe.execute()
 
-    # Use Redis set intersection to find IDs that have both embeddings
+    # Step 2: Use Redis set intersection to find IDs that have both embeddings
     ready_ids = await redis_client.sinter(TEXT_EMBEDDING_SET, IMAGE_EMBEDDING_SET)
 
-    # Retrieve the data for all IDs that are ready using a pipeline
+    # Step 3: Retrieve the data for all IDs that are ready using a pipeline
     async with redis_client.pipeline() as pipe:
         for data_id in ready_ids:
             pipe.hgetall(data_id)
 
         combined_data_list = await pipe.execute()
 
-    # Return only the complete data for ingestion
-    return [data for data in combined_data_list if data]
+    # Step 4: Construct the combined data list with IDs and their respective embeddings
+    for data_id, combined_data in zip(ready_ids, combined_data_list):
+        if 'EMBEDDINGS_TEXT' in combined_data and 'EMBEDDINGS_IMAGE' in combined_data:
+            combined_data_dict[data_id] = {
+                'id': data_id,
+                'text_embedding': json.loads(combined_data['EMBEDDINGS_TEXT']),
+                'image_embedding': json.loads(combined_data['EMBEDDINGS_IMAGE'])
+            }
+
+    return list(combined_data_dict.values())

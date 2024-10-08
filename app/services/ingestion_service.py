@@ -1,4 +1,5 @@
 import httpx
+from app.services.redis_service import delete_keys_from_redis
 
 async def ingest_combined_data_bulk(data_list: list):
     """
@@ -24,6 +25,8 @@ async def ingest_combined_data_bulk(data_list: list):
 
         # Handle the response as needed
         if response.status_code == 200:
+            ids_to_clear = [data['id'] for data in data_list]
+            await delete_keys_from_redis(ids_to_clear) # Clear Redis keys
             return response.status_code, response.json()
         else:
             raise Exception(f"Failed to ingest data: {response.text}")

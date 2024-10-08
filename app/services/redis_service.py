@@ -27,13 +27,15 @@ async def save_embeddings_batch(batch_embeddings: list):
             data_id = embedding_data.id  # Ensure we use the ID
             embedding_type = embedding_data.embedding_type
             embedding = embedding_data.embedding
+            index_name = embedding_data.index_name # Get the index name
             key = f"{data_id}"
 
             # Retrieve the current data stored for this ID from Redis
             existing_data = await redis_client.hgetall(key)
 
-            # Update the existing data with the new embedding
+            # Update the existing data with the new embedding and index_name
             existing_data[embedding_type] = json.dumps(embedding)
+            existing_data['index_name'] = index_name # Store index_name with the data 
 
             # Add the updated data to the Redis pipeline
             pipe.hset(key, mapping=existing_data)
@@ -58,12 +60,15 @@ async def save_embeddings_batch(batch_embeddings: list):
         combined_data_list = await pipe.execute()
 
     # Step 4: Construct the combined data list with IDs and their respective embeddings
+    # Format the combined data properly and include the ID and index_name
+    formatted_combined_data_list = []
     for data_id, combined_data in zip(ready_ids, combined_data_list):
         if 'EMBEDDINGS_TEXT' in combined_data and 'EMBEDDINGS_IMAGE' in combined_data:
-            combined_data_dict[data_id] = {
+            formatted_combined_data_list.append({
                 'id': data_id,
                 'text_embedding': json.loads(combined_data['EMBEDDINGS_TEXT']),
-                'image_embedding': json.loads(combined_data['EMBEDDINGS_IMAGE'])
-            }
+                'image_embedding': json.loads(combined_data['EMBEDDINGS_IMAGE']),
+                'index_name': combined_data['index_name']  # Include the index name for ingestion
+            })
 
-    return list(combined_data_dict.values())
+    return formatted_combined_data_list

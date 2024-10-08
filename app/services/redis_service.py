@@ -72,3 +72,17 @@ async def save_embeddings_batch(batch_embeddings: list):
             })
 
     return formatted_combined_data_list
+    
+async def delete_keys_from_redis(ids: list):
+    """
+    Deletes the keys from Redis corresponding to the given list of IDs.
+
+    Args:
+        ids (list): A list of IDs whose Redis data should be deleted.
+    """
+    async with redis_client.pipeline() as pipe:
+        for data_id in ids:
+            # Delete the hash for this ID from Redis
+            pipe.delete(data_id)
+        await pipe.execute()  # Execute the pipeline to delete the keys
+

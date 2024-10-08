@@ -75,14 +75,22 @@ async def save_embeddings_batch(batch_embeddings: list):
     
 async def delete_keys_from_redis(ids: list):
     """
-    Deletes the keys from Redis corresponding to the given list of IDs.
+    Deletes the Redis keys corresponding to the given list of IDs and removes them from tracking sets.
 
     Args:
         ids (list): A list of IDs whose Redis data should be deleted.
     """
+    TEXT_EMBEDDING_SET = "text_embedding_ids"
+    IMAGE_EMBEDDING_SET = "image_embedding_ids"
+
     async with redis_client.pipeline() as pipe:
-        for data_id in ids:
-            # Delete the hash for this ID from Redis
-            pipe.delete(data_id)
-        await pipe.execute()  # Execute the pipeline to delete the keys
+        # Batch delete the hash keys for the IDs
+        pipe.delete(*ids)  # Use the splat operator (*) to pass all IDs in one go to the 'del' command
+
+        # Remove IDs from the text and image embedding sets
+        pipe.srem(TEXT_EMBEDDING_SET, *ids)  # Batch remove IDs from the text embedding set
+        pipe.srem(IMAGE_EMBEDDING_SET, *ids)  # Batch remove IDs from the image embedding set
+
+        # Execute the pipeline to perform all operations in a batch
+        await pipe.execute()
 

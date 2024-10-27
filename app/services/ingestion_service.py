@@ -21,7 +21,10 @@ async def ingest_combined_data_bulk(data_list: list):
 
     # Send the entire batch to the bulk ingestion endpoint
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"http://database-service:8000/ingest/{index_name}", json=data_list)
+        response = await client.post(
+            f"http://database.kundalin.com/ingest/?index_name={index_name}",
+            json=data_list
+        )
 
         # Handle the response as needed
         if response.status_code == 200:

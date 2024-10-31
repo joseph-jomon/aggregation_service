@@ -20,9 +20,11 @@ async def ingest_combined_data_bulk(data_list: list):
     index_name = index_names.pop()
 
     # Send the entire batch to the bulk ingestion endpoint
+    # This endpoing is not sending the query parameters the right
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            f"http://database.kundalin.com/ingest/?index_name={index_name}",
+            f"http://database.kundalin.com/ingest/",
+            params={"index_name": index_name}, # Using params for query parameters
             json=data_list
         )
 
